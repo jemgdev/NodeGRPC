@@ -3,8 +3,9 @@ import * as grpc from '@grpc/grpc-js'
 import * as protoLoader from '@grpc/proto-loader'
 import { ProtoGrpcType } from './proto/random';
 import { RandomHandlers } from './proto/randomPackage/Random';
-import { TodoResponse } from './proto/randomPackage/TodoResponse';
 import { TodoRequest } from './proto/randomPackage/TodoRequest';
+import { ChatRequest } from './proto/randomPackage/ChatRequest';
+import { ChatResponse } from './proto/randomPackage/ChatResponse';
 
 const PORT = 8082
 
@@ -30,6 +31,8 @@ function main() {
 const todoList: {
   todos: TodoRequest[] 
 } = { todos: [] }
+
+const callObjectByUsername = new Map<string, grpc.ServerDuplexStream<ChatRequest, ChatResponse>>()
 
 function getServer() {
   const server = new grpc.Server()
@@ -70,6 +73,42 @@ function getServer() {
 
       call.on('end', () => {
         callback(null, { toDos: todoList.todos })
+      })
+    },
+    Chat: (call) => {
+      call.on('data', (request) => {
+        console.log(call.metadata.get('username')[0])
+        const username = call.metadata.get('username')[0] as string
+        // @ts-ignore
+        const message = call.message
+        
+        console.log(request)
+
+        for(let [user, usersCall] of callObjectByUsername) {
+          console.log(username, user)
+          if (username !== user) {
+            usersCall.write({
+              username,
+              message
+            })
+          }
+        }
+
+        if (callObjectByUsername.get('username') === undefined) {
+          callObjectByUsername.set(username, call)
+        }
+      })
+      
+      call.on('end', () => {
+        const username = call.metadata.get('username')[0] as string
+        callObjectByUsername.delete(username)
+        console.log(`${username} is ending their chat session`)
+        call.write({
+          username: 'Server',
+          message: `See you later ${username}`
+        })
+
+        call.end()
       })
     }
   } as RandomHandlers)
