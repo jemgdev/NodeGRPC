@@ -82,7 +82,7 @@ function getServer() {
         // @ts-ignore
         const message = call.message
         
-        console.log(request)
+        console.log(username, request.message)
 
         for(let [user, usersCall] of callObjectByUsername) {
           console.log(username, user)
@@ -103,6 +103,25 @@ function getServer() {
         const username = call.metadata.get('username')[0] as string
         callObjectByUsername.delete(username)
         console.log(`${username} is ending their chat session`)
+        call.write({
+          username: 'Server',
+          message: `See you later ${username}`
+        })
+
+        call.end()
+      })
+
+      call.on('end', () => {
+        const username = call.metadata.get('username')[0] as string
+        callObjectByUsername.delete(username)
+        for(let [user, usersCall] of callObjectByUsername) {
+          if (username !== user) {
+            usersCall.write({
+              username,
+              message: 'Has left the chat'
+            })
+          }
+        }
         call.write({
           username: 'Server',
           message: `See you later ${username}`
